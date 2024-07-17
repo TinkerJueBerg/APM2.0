@@ -1,0 +1,120 @@
+import sys
+import time
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+import pyqtgraph as pg
+import pynput
+from PyQt5.QtGui import *
+
+
+        
+class MainWindow(QMainWindow):
+    def __init__(self,parent=None):
+        super().__init__()
+        super(MainWindow, self).__init__(parent)
+        # desktop size
+        desktop = QDesktopWidget()
+        screen_width = desktop.screenGeometry().width()
+        screen_height = desktop.screenGeometry().height()
+    
+        # 布局函数 def layout 
+        self.central_widget = QWidget()
+        self.resize(screen_width // 2, screen_height // 2)
+        self.setCentralWidget(self.central_widget)
+        self.setWindowTitle("APM统计器")
+        self.layout = QVBoxLayout(self.central_widget)
+        
+
+        # APM计算属性 APM calculator
+        self.x = 0
+        self.count = 0
+        self.queue_60 = []
+        self.apm = 0
+        self.x_values = []
+        self.y_values = []
+        self.duration = 1800
+
+
+        self.button = QPushButton("Button 1")
+        self.layout.addWidget(self.button)
+        self.button.clicked.connect(self.plot_graph)
+        #self.plot_graph()
+        self.graphWidget = None  # 初始化为 None
+        # 只在 update_plot 方法中启动一次定时器
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_plot)
+        # self.timer.start(1000)  
+        # 监听器 listener
+        #self.closeEvent = self.on_close
+        self.mouse_listener = pynput.mouse.Listener(on_click=self.on_click)
+        self.keyboard_listener = pynput.keyboard.Listener(on_press=self.on_press)
+        self.mouse_listener.start()
+        self.keyboard_listener.start()
+        
+           
+    def update_plot(self):
+        
+        # 时间控制器 time contorller
+        
+        if self.x < self.duration:
+            self.x += 1
+            self.x_values.append(self.x)
+        else:   
+            self.y_values.pop(0)
+        
+        if self.x <= 60:
+            pass
+        else:
+            self.apm -= self.queue_60[0]
+            self.queue_60.pop(0)
+            
+        self.queue_60.append(self.count)
+        self.apm += self.count      
+        self.y_values.append(self.apm)
+        # reset count
+        self.count = 0 
+        
+   
+        self.plot_graph()
+        
+    def plot_graph(self):
+        if not self.graphWidget:  # 如果尚未创建，才创建
+            self.graphWidget = pg.PlotWidget()
+            self.graphWidget.setRenderHint(QPainter.Antialiasing)
+            self.layout.addWidget(self.graphWidget)
+            
+        
+        pen1 = pg.mkPen(color=(85, 159, 236), width=2)  
+        pen2 = pg.mkPen(color=(42, 74, 118), width=2)  
+        
+        self.graphWidget.setBackground('w')
+        self.graphWidget.setTitle('APM统计,现在的APM是{}'.format(self.apm),font='30',color='black')  # 设置标题
+        self.graphWidget.setLabel('left', 'APMs', font='Arial, 20')  # 设置 Y 轴标签
+        self.graphWidget.setLabel('bottom', 'Times', font='Arial, 20')  # 设置 X 轴标签
+        self.graphWidget.showGrid(x=True, y=True)  # 显示网格
+        self.graphWidget.addLegend()
+        self.graphWidget.plot(self.x_values, self.y_values, pen=pen1, clear=True,name="total_APM")
+        self.timer.start(1000)  
+        
+
+        
+    def on_click(self, x, y, button, pressed):
+        if pressed:
+            self.count += 1
+
+    def on_press(self, key):
+        self.count += 1
+
+    def on_close(self, event):
+        # 停止定时器
+        self.timer.stop()
+        self.mouse_listener.stop()
+        self.keyboard_listener.stop()
+        event.accept()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    
+    window.show()
+    sys.exit(app.exec_())
